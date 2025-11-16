@@ -1,9 +1,12 @@
-Django
+Django==5.0
+djangorestframework
 django-cors-headers
 django-ninja
 django-ninja-jwt[crypto]
 dj-database-url
-psycopg[binary] # psycopg
+psycopg[binary]
 pydantic[email]
 python-decouple
 django-allauth[socialaccount]
+celery==5.5.3
+redis

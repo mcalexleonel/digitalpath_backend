@@ -26,16 +26,17 @@ SECRET_KEY = config("DJANGO_SECRET_KEY", cast=str)
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = config("DJANGO_DEBUG", cast=bool, default=False)
 
-ALLOWED_HOSTS = [
-    ".railway.app"
-]
+# Allowed Hosts Configuration
+ALLOWED_HOSTS = []
+ENV_ALLOWED_HOSTS = config("ENV_ALLOWED_HOSTS", cast=str, default="")
+if ENV_ALLOWED_HOSTS:
+    ALLOWED_HOSTS = [host.strip() for host in ENV_ALLOWED_HOSTS.split(",")]
+
+# Allow all hosts in development
 if DEBUG:
     ALLOWED_HOSTS = ["*"]
 
-CSRF_TRUSTED_ORIGINS = [
-    "http://*.railway.app",
-    "https://*.railway.app",
-]
+# CORS and CSRF Configuration - Set later after CORS_ALLOWED_ORIGINS
 
 # Application definition
 
@@ -49,13 +50,18 @@ INSTALLED_APPS = [
     "django.contrib.sites",  # Required for allauth
     # third party
     "corsheaders",
+    "rest_framework",
     "ninja_extra",
     "ninja_jwt",
     "allauth",
     "allauth.account",
     "allauth.socialaccount",
+    "allauth.socialaccount.providers.google",
+    "allauth.socialaccount.providers.github",
     # internal
     "waitlists",
+    "projects",
+    "contact",
 ]
 
 MIDDLEWARE = [
@@ -72,13 +78,22 @@ MIDDLEWARE = [
 
 ROOT_URLCONF = "core.urls"
 
+# CORS Configuration
 CORS_URLS_REGEX = r"^/api/.*$"
 CORS_ALLOWED_ORIGINS = []
 ENV_CORS_ALLOWED_ORIGINS = config("CORS_ALLOWED_ORIGINS", cast=str, default="")
-for origin in ENV_CORS_ALLOWED_ORIGINS.split(","):
-    CORS_ALLOWED_ORIGINS.append(f"{origin}".strip().lower())
+if ENV_CORS_ALLOWED_ORIGINS:
+    for origin in ENV_CORS_ALLOWED_ORIGINS.split(","):
+        origin_clean = origin.strip()
+        if origin_clean:
+            CORS_ALLOWED_ORIGINS.append(origin_clean)
 
-# CORS_ALLOW_ALL_ORIGINS = True
+# CSRF Trusted Origins (built from CORS allowed origins)
+CSRF_TRUSTED_ORIGINS = CORS_ALLOWED_ORIGINS.copy()
+
+# Uncomment to allow all origins in development (not recommended)
+# if DEBUG:
+#     CORS_ALLOW_ALL_ORIGINS = True
 
 TEMPLATES = [
     {
@@ -155,6 +170,11 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/5.0/howto/static-files/
 
 STATIC_URL = "static/"
+STATIC_ROOT = BASE_DIR.parent / "static"
+
+# Media files
+MEDIA_URL = "media/"
+MEDIA_ROOT = BASE_DIR.parent / "media"
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.0/ref/settings/#default-auto-field
@@ -190,12 +210,47 @@ AUTHENTICATION_BACKENDS = [
 
 # Allauth settings
 ACCOUNT_LOGIN_METHODS = {"username", "email"}  # Allow login with username or email
-ACCOUNT_EMAIL_VERIFICATION = "mandatory"  # Email verification is mandatory
+ACCOUNT_EMAIL_VERIFICATION = "mandatory"  # Email verification is mandatory for regular signups
 ACCOUNT_EMAIL_SUBJECT_PREFIX = "DigitalPath AI - "
-ACCOUNT_SIGNUP_FIELDS = ["email*", "username*", "password1*"]  # Required fields for signup
+ACCOUNT_SIGNUP_FIELDS = ["email*", "username*", "password1*", "password2*"]  # Required fields for signup
+SOCIALACCOUNT_EMAIL_VERIFICATION = "none"  # No email verification needed for social accounts (email already verified by provider)
+SOCIALACCOUNT_AUTO_SIGNUP = True  # Automatically create account for social logins
 LOGIN_REDIRECT_URL = "/"
 ACCOUNT_LOGOUT_REDIRECT_URL = "/"
 
-# For development: print emails to console
-if DEBUG:
-    EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
+# Frontend URL for email verification (Next.js)
+FRONTEND_URL = config("FRONTEND_URL", cast=str, default="http://localhost:3000")
+
+# Social Account Adapter (custom for headless/JWT setup)
+SOCIALACCOUNT_ADAPTER = "helpers.socialaccount_adapter.CustomSocialAccountAdapter"
+
+# Social Account Providers Configuration
+SOCIALACCOUNT_PROVIDERS = {
+    "google": {
+        "SCOPE": [
+            "profile",
+            "email",
+        ],
+        "AUTH_PARAMS": {
+            "access_type": "online",
+        },
+    },
+    "github": {
+        "SCOPE": [
+            "user",
+            "user:email",
+        ],
+    },
+}
+
+# For development: print emails to console (commented out to enable real email sending)
+# if DEBUG:
+#     EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
+
+# Celery Configuration
+CELERY_BROKER_URL = config("CELERY_BROKER_URL", cast=str, default="redis://localhost:6379/0")
+CELERY_RESULT_BACKEND = config("CELERY_RESULT_BACKEND", cast=str, default="redis://localhost:6379/0")
+CELERY_ACCEPT_CONTENT = ["json"]
+CELERY_TASK_SERIALIZER = "json"
+CELERY_RESULT_SERIALIZER = "json"
+CELERY_TIMEZONE = TIME_ZONE
